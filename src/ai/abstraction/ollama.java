@@ -58,7 +58,7 @@ public class ollama extends AbstractionLayerAI {
     String timestamp = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
 
     JsonObject wrapper = new JsonObject();
-    String FilenameXXXten ="";
+    //String FilenameXXXten ="";
     Random r = new Random();
     protected UnitTypeTable utt; // different class
     UnitType resourceType;
@@ -107,7 +107,7 @@ public class ollama extends AbstractionLayerAI {
             System.getenv().getOrDefault("OLLAMA_HOST", "http://localhost:11434");
 
     static String MODEL =
-            System.getenv().getOrDefault("OLLAMA_MODEL", "deepseek-r1:14b"); // smollm2:135m is bad real bad
+            System.getenv().getOrDefault("OLLAMA_MODEL", "llama3.1:8b"); // smollm2:135m is bad real bad
     // deepseek-r1:14b
      //
 
@@ -362,7 +362,7 @@ public class ollama extends AbstractionLayerAI {
         //
         System.out.println(" in this 1 st nd mg546924 288   ----- >  Y / N ");
         String timestamp1 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date());
-        FilenameXXXten = "LLmGemini_"+timestamp1+".json";
+       //  FilenameXXXten = "LLmGemini_"+timestamp1+".json";
         // this is also good i gess
         // String fileName01 = "Response_format_02"+".csv";
 
@@ -478,7 +478,7 @@ public class ollama extends AbstractionLayerAI {
         // Build names once
         String ts = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new java.util.Date());
         fileName01 = "Response" + ts + "_" + a + "_" + num_shot + "_" + b + "_" + MODEL + ".csv";
-        FilenameXXXten = "LLM_Gemini_" + ts + ".json";
+       // FilenameXXXten = "LLM_Gemini_" + ts + ".json";
 
         try (FileWriter writer = new FileWriter(fileName01)) {
             writer.append("Thinking,Moves,Feature locations,Request Time, Request / Prompt Tokens, response Time, Response Tokens, Latency(milliseconds),Total Tokens,Score_in_every_run\n");
@@ -669,6 +669,7 @@ public class ollama extends AbstractionLayerAI {
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         String prettyJson = gson.toJson(jsonResponse);
 
+        /**
         try (FileWriter file = new FileWriter(FilenameXXXten, true)) {
             String tsNow = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date());
             file.write("[" + tsNow + "]\n");
@@ -676,7 +677,7 @@ public class ollama extends AbstractionLayerAI {
             file.write(System.lineSeparator());
         } catch (IOException e) {
             e.printStackTrace();
-        }
+        } */
 
         // ===== Extract "moves" array from model output =====
         JsonArray moveElements = jsonResponse.getAsJsonArray("moves");
