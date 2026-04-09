@@ -2,7 +2,6 @@ package ai.abstraction.submissions.hope;
 
 import ai.abstraction.AbstractionLayerAI;
 import ai.abstraction.WorkerRush;
-import ai.abstraction.WorkerRushPlusPlus;
 import ai.abstraction.LightRush;
 import ai.abstraction.HeavyRush;
 import ai.abstraction.RangedRush;
@@ -55,7 +54,6 @@ public class hope extends AbstractionLayerAI {
 
     public enum RushStrategy {
         WORKER_RUSH,
-        WORKER_RUSH_PLUS,
         LIGHT_RUSH,
         HEAVY_RUSH,
         RANGED_RUSH,
@@ -66,7 +64,6 @@ public class hope extends AbstractionLayerAI {
 
     // Strategy instances (composition pattern)
     private WorkerRush workerRushAI;
-    private WorkerRushPlusPlus workerRushPlusAI;
     private LightRush lightRushAI;
     private HeavyRush heavyRushAI;
     private RangedRush rangedRushAI;
@@ -118,7 +115,6 @@ public class hope extends AbstractionLayerAI {
     public void reset() {
         super.reset();
         if (workerRushAI != null) workerRushAI.reset();
-        if (workerRushPlusAI != null) workerRushPlusAI.reset();
         if (lightRushAI != null) lightRushAI.reset();
         if (heavyRushAI != null) heavyRushAI.reset();
         if (rangedRushAI != null) rangedRushAI.reset();
@@ -131,7 +127,6 @@ public class hope extends AbstractionLayerAI {
         utt = a_utt;
         // Initialize all strategy instances
         workerRushAI = new WorkerRush(a_utt, pf);
-        workerRushPlusAI = new WorkerRushPlusPlus(a_utt, pf);
         lightRushAI = new LightRush(a_utt, pf);
         heavyRushAI = new HeavyRush(a_utt, pf);
         rangedRushAI = new RangedRush(a_utt, pf);
@@ -178,8 +173,6 @@ public class hope extends AbstractionLayerAI {
         switch (currentStrategy) {
             case WORKER_RUSH:
                 return workerRushAI;
-            case WORKER_RUSH_PLUS:
-                return workerRushPlusAI;
             case LIGHT_RUSH:
                 return lightRushAI;
             case HEAVY_RUSH:
@@ -569,7 +562,6 @@ public class hope extends AbstractionLayerAI {
 
         // Try to find strategy name in plain text
         String upper = response.toUpperCase();
-        if (upper.contains("WORKER_RUSH_PLUS")) return RushStrategy.WORKER_RUSH_PLUS;
         if (upper.contains("WORKER_RUSH")) return RushStrategy.WORKER_RUSH;
         if (upper.contains("LIGHT_RUSH")) return RushStrategy.LIGHT_RUSH;
         if (upper.contains("HEAVY_RUSH")) return RushStrategy.HEAVY_RUSH;
@@ -587,7 +579,6 @@ public class hope extends AbstractionLayerAI {
      */
     private RushStrategy parseStrategyString(String s) {
         switch (s) {
-            case "WORKER_RUSH_PLUS": return RushStrategy.WORKER_RUSH_PLUS;
             case "WORKER_RUSH": return RushStrategy.WORKER_RUSH;
             case "LIGHT_RUSH": return RushStrategy.LIGHT_RUSH;
             case "HEAVY_RUSH": return RushStrategy.HEAVY_RUSH;
@@ -627,4 +618,3 @@ public class hope extends AbstractionLayerAI {
                ", errors=" + llmErrors + ")";
     }
 }
-
