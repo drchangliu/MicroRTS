@@ -1,19 +1,31 @@
 /*
- * This is a modified version of Mayari. Below is a summary of the changes made.
+ * AlliBot (LLM-guided MCTS + rule fallback)
  *
- * 1) Updated damage tracking
+ * Flow (getAction 1666):
+ *  - trySearchLLMAction() (1595) first; falls back to getRuleBasedAction() (1622).
+ *  - Rule path calls: attackNearby() (1381), buildBracks() (1281), buildBase() (1163),
+ *    barracksAction() (1126), basesAction() (1052), workerAction() (886), then goCombat() (710).
  *
- * 2) Updated action legality check
+ * Defense / anti-rush:
+ *  - Rush detector isWorkerRush() (831) + baseUnderThreat() (741) active to tick 600.
+ *  - Early worker rush/defense handled in workerAction() (886) and basesAction() (1052);
+ *    bodyblockers picked in init() (1411).
  *
- * 3) Added base-under-threat behavior:
- *    - workers can defend sooner
- *    - fewer harvesters under pressure
- *    - barracks prioritize ranged while defending
+ * Economy / production:
+ *  - harvesterPerBase() (868) scales workers per base by map size; small-map rush in workerAction() before tick 400.
+ *  - buildBracks() (1281) for fast barracks; buildBase() (1163).
+ *
+ * Combat targeting:
+ *  - goCombat() (710) chooses targets; attackNearby() overloads (1352/1368/1381) handle close fights.
+ * 
+ * SARSA macro (USE_SARSA) influences worker attack via shouldWorkersAttack() (804) when enabled.
+ * 
  */
 
 package ai.abstraction.submissions.allibot;
 
 import ai.abstraction.pathfinding.AStarPathFinding;
+import ai.mcts.llmguided.LLMInformedMCTS;
 import ai.core.AI;
 import ai.core.AIWithComputationBudget;
 import ai.core.ParameterSpecification;
@@ -24,6 +36,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Random;
 import rts.GameState;
 import rts.PhysicalGameState;
 import static rts.PhysicalGameState.TERRAIN_WALL;
@@ -44,7 +57,6 @@ import rts.units.UnitTypeTable;
  * version 2.0
 */
 public class alli extends AIWithComputationBudget {
-        
     public class Pos {
         int _x;
         int _y;
@@ -102,8 +114,32 @@ public class alli extends AIWithComputationBudget {
     List<Unit> _enemies;
     List<Unit> _enemiesCombat;
 
+    // Reserved bodyblock defenders when facing early worker rushes.
+    Unit _bb1;
+    Unit _bb2;
+
     List<Unit> _all;    
     HashMap<Unit, Integer> _newDmgs;
+
+    // Enable/disable Search+LLM at runtime without code changes.
+    // Example: set ALLI_USE_SEARCH_LLM=false to force pure rule-based mode.
+    private static final boolean USE_SEARCH_LLM =
+            Boolean.parseBoolean(System.getenv().getOrDefault("ALLI_USE_SEARCH_LLM", "true"));
+
+    // How many game ticks to wait between Search+LLM calls.
+    // 1 means "try Search+LLM every tick" (recommended for full Search+LLM mode).
+    private static final int SEARCH_LLM_INTERVAL =
+            Integer.parseInt(System.getenv().getOrDefault("ALLI_SEARCH_INTERVAL", "1"));
+
+    // Search+LLM delegate used as the primary decision engine.
+    private final LLMInformedMCTS _searchAgent;
+
+    // Tracks when search last ran so interval control is easy to reason about.
+    private int _lastSearchTick = -9999;
+
+    // Optional on-policy SARSA learner (macro: send workers to fight vs. keep harvesting).
+    private static final boolean USE_SARSA = true; 
+    private final SarsaWorkerAttack _sarsa;
 
     public void restartPathFind() {
         _astarPath = new AStarPathFinding();
@@ -194,9 +230,74 @@ public class alli extends AIWithComputationBudget {
         return astarMove;
     }
 
+    /*
+     * SARSA(0) over a tiny state-action space to decide whether workers should
+     * join combat. Kept conservative to avoid harming early economy.
+     */
+    private static class SarsaWorkerAttack {
+        static final int ACTION_DEFEND = 0;
+        static final int ACTION_ATTACK = 1;
+
+        private final HashMap<String, double[]> _q = new HashMap<>();
+        private final double _alpha = 0.15;
+        private final double _gamma = 0.95;
+        private final double _epsilon = 0.02; // very low exploration to stay stable
+        private final Random _rnd = new Random(7);
+
+        private String _lastState = null;
+        private int _lastAction = -1;
+        private double _lastScore = 0;
+
+        private double[] row(String s) {
+            return _q.computeIfAbsent(s, k -> new double[]{0, 0});
+        }
+
+        int selectAction(String state) {
+            double[] r = row(state);
+            if (_rnd.nextDouble() < _epsilon)
+                return _rnd.nextInt(2);
+            return r[ACTION_ATTACK] > r[ACTION_DEFEND] ? ACTION_ATTACK : ACTION_DEFEND;
+        }
+
+        int step(String state, double score) {
+            // Pick next action (a')
+            int action = selectAction(state);
+            // Update previous state-action using SARSA target with a'
+            if (_lastState != null && _lastAction >= 0) {
+                double reward = score - _lastScore;
+                double[] prev = row(_lastState);
+                double[] next = row(state);
+                double target = reward + _gamma * next[action];
+                prev[_lastAction] = prev[_lastAction] + _alpha * (target - prev[_lastAction]);
+            }
+            _lastState = state;
+            _lastAction = action;
+            _lastScore = score;
+            return action;
+        }
+
+        void reset() {
+            _q.clear();
+            _lastState = null;
+            _lastAction = -1;
+            _lastScore = 0;
+        }
+    }
+
+    // Constructor to create search agent
     public alli(UnitTypeTable utt) {
         super(-1, -1);
         _utt = utt;
+        // Initialize Search+LLM delegate once and reuse it.
+        LLMInformedMCTS tmp;
+        try {
+            tmp = new LLMInformedMCTS(utt);
+        } catch (Exception e) {
+            tmp = null;
+            System.err.println("[alli] LLMInformedMCTS init failed (using rules only): " + e.getMessage());
+        }
+        _searchAgent = tmp;
+        _sarsa = USE_SARSA ? new SarsaWorkerAttack() : null;
         restartPathFind(); //FloodFillPathFinding(); //AStarPathFinding();
         _memHarvesters = new ArrayList<>();
                 
@@ -209,6 +310,12 @@ public class alli extends AIWithComputationBudget {
     @Override
     public void reset() {
         _memHarvesters = new ArrayList<>();
+        _lastSearchTick = -9999;
+        if (_sarsa != null)
+            _sarsa.reset();
+        // Reset internal tree/cache state in the Search+LLM delegate.
+        if (_searchAgent != null)
+            _searchAgent.reset();
         restartPathFind(); //FloodFillPathFinding();//BFSPathFinding();//AStarPathFinding();
     }
     @Override
@@ -418,6 +525,10 @@ public class alli extends AIWithComputationBudget {
         _pa.addUnitAction(a, ua);
         if (!_newDmgs.containsKey(e))
             _newDmgs.put(e, 0);
+        // getMaxHitPoints() was changed to getMaxDamage().
+        // Before, it added the attacker’s HP to predicted damage on the enemy.
+        // Now, it adds the attacker’s attack damage, which is what should reduce enemy HP.
+        // It now says, “if this attack is legal, schedule it and count how much damage this attacker will do to that enemy.”
         int newDmg = _newDmgs.get(e) + a.getMaxDamage();
         _newDmgs.replace(e, newDmg);
         return true;
@@ -475,6 +586,10 @@ public class alli extends AIWithComputationBudget {
             if (!posFree(newPos.getX(), newPos.getY(), NoDirection)) //a hack
                 continue;
             UnitAction ua = new UnitAction(UnitAction.TYPE_MOVE, dir);
+            // ua is an action built for unit a (move/attack/etc).
+            // Old code checked legality for b but then assigned the action to a
+            // So before, it was validating the wrong unit, which could:
+            // reject valid actions for a, or allow actions that are illegal for a. 
             if (_gs.isUnitActionAllowed(a, ua)) {
                 _pa.addUnitAction(a, ua);
                 lockPos(newPos.getX(), newPos.getY(), NoDirection);
@@ -622,6 +737,7 @@ public class alli extends AIWithComputationBudget {
         }
     }
     
+    // Treat the base as threatened if any enemy attacker (or rushing worker) gets close.
     boolean baseUnderThreat() {
         if (_bases.isEmpty())
             return false;
@@ -629,21 +745,114 @@ public class alli extends AIWithComputationBudget {
         for (Unit enemy : _enemies) {
             if (!enemy.getType().canAttack && enemy.getType() != _utt.getUnitType("Worker"))
                 continue;
-            if (distance(base, enemy) <= 6)
+            int dist = distance(base, enemy);
+            if (dist <= 8)
                 return true;
         }
         return false;
     }
+
+    int closestEnemyWorkerDistanceToBase() {
+        if (_bases.isEmpty() || _enemyWorkers.isEmpty())
+            return Integer.MAX_VALUE;
+        Unit base = _bases.get(0);
+        return _enemyWorkers.stream().mapToInt(w -> distance(base, w)).min().getAsInt();
+    }
+
+    Unit closestEnemyWorkerToBase() {
+        if (_bases.isEmpty() || _enemyWorkers.isEmpty())
+            return null;
+        Unit base = _bases.get(0);
+        return _enemyWorkers.stream().min(Comparator.comparingInt(w -> distance(base, w))).orElse(null);
+    }
+
+    boolean smallMapRushMode() {
+        int area = _pgs.getWidth() * _pgs.getHeight();
+        return area <= 144; // 12x12 or smaller, mirrors CRush's rush trigger
+    }
+
+    // --- SARSA helpers (lightweight state + reward) ---
+    String sarsaStateKey() {
+        int timeBucket = (_gs != null ? _gs.getTime() : 0) / 200;
+        int mapBucket = (_pgs.getWidth() * _pgs.getHeight()) <= 144 ? 0 : 1;
+        int workerDiff = Integer.signum(_workers.size() - _enemyWorkers.size());
+        int barracksDiff = Integer.signum(_barracks.size() - _enemyBarracks.size());
+        int threat = baseUnderThreat() ? 1 : 0;
+        return "t" + timeBucket + "_m" + mapBucket + "_wd" + workerDiff +
+               "_bd" + barracksDiff + "_th" + threat;
+    }
+
+    double sarsaScore() {
+        int myHP = 0;
+        for (Unit u : _allyUnits)
+            myHP += u.getHitPoints();
+        int enemyHP = 0;
+        for (Unit u : _enemies)
+            enemyHP += u.getHitPoints();
+        int resourceDiff = (_p != null && _enemyP != null) ? _p.getResources() - _enemyP.getResources() : 0;
+        return (myHP - enemyHP) + 4 * resourceDiff;
+    }
+
+    boolean safeToOverrideWithSARSA() {
+        if (_workers.size() <= 3)
+            return false; // keep economy intact
+        if (_gs != null && _gs.getTime() < 150)
+            return false; // avoid very early aggression
+        return true;
+    }
     
     boolean shouldWorkersAttack() {
-        if (baseUnderThreat())
+        boolean heuristic =
+                isWorkerRush() ||
+                baseUnderThreat() ||
+                _pgs.getWidth() <= 12 ||
+                (enemyHeaviesWeak() && _enemyArchers.isEmpty() &&
+                     _heavies.isEmpty() && _futureHeavies == 0 && _archers.isEmpty());
+        if (heuristic)
             return true;
-        if (_pgs.getWidth() <= 12)
+
+        // On-policy SARSA override (very conservative). If disabled, return heuristic only.
+        if (_sarsa == null)
+            return false;
+
+        String state = sarsaStateKey();
+        double score = sarsaScore();
+        int action = _sarsa.step(state, score);
+        boolean sarsaAttack = (action == SarsaWorkerAttack.ACTION_ATTACK);
+
+        if (heuristic)
             return true;
-        if (enemyHeaviesWeak() && _enemyArchers.isEmpty() &&
-                 _heavies.isEmpty() && _futureHeavies == 0 && _archers.isEmpty())
+        if (sarsaAttack && safeToOverrideWithSARSA())
             return true;
-        return false; //todo here
+        return false;
+    }
+    
+    // Detect early worker-only aggression.
+    boolean isWorkerRush() {
+        // GameState exposes the current tick; PhysicalGameState does not.
+        if (_gs != null && _gs.getTime() > 600)
+            return false;
+        int eWorkers = _enemyWorkers.size();
+        int eBarracks = _enemyBarracks.size();
+        int eCombat = _enemyLights.size() + _enemyHeavies.size() + _enemyArchers.size();
+        int distToBase = closestEnemyWorkerDistanceToBase();
+        boolean enemyAlreadyClose = distToBase <= Math.max(6, _pgs.getWidth() / 2);
+        return eBarracks == 0 && eCombat == 0 &&
+               (eWorkers >= 3 || (eWorkers >= 2 && enemyAlreadyClose));
+    }
+    
+    // Detect early worker-only aggression.
+    boolean isWorkerRush() {
+        // GameState exposes the current tick; PhysicalGameState does not.
+        if (_gs != null && _gs.getTime() > 600)
+            return false;
+        int eWorkers = _enemyWorkers.size();
+        int eBarracks = _enemyBarracks.size();
+        int eCombat = _enemyLights.size() + _enemyHeavies.size() + _enemyArchers.size();
+        int distToBase = closestEnemyWorkerDistanceToBase();
+        boolean enemyAlreadyClose = distToBase <= Math.max(6, _pgs.getWidth() / 2);
+        return eBarracks == 0 && eCombat == 0 &&
+               (eWorkers >= 3 || (eWorkers >= 2 && enemyAlreadyClose));
     }
     
     int harvestScore(Unit worker, List<Unit> basesRemain) {
@@ -671,6 +880,7 @@ public class alli extends AIWithComputationBudget {
     }
     
     int harvesterPerBase() {
+        // Under pressure, keep fewer harvesters so more workers are available to defend.
         if (baseUnderThreat())
             return 1;
         
@@ -690,6 +900,70 @@ public class alli extends AIWithComputationBudget {
     void workerAction() {
         List<Unit> ws = new ArrayList<>(_workers);
         List<Unit> bs = new ArrayList<>(_bases);
+
+        // CRush-inspired early aggression on small maps: all workers rush enemy base/workers before 400 ticks
+        if (smallMapRushMode() && _gs.getTime() < 400 && !_workers.isEmpty()) {
+            _memHarvesters.clear();
+            Unit target = !_enemyBases.isEmpty() ? _enemyBases.get(0) : closestEnemyWorkerToBase();
+            if (target == null && !_enemies.isEmpty())
+                target = _enemies.get(0);
+            for (Unit w : _workers) {
+                if (busy(w))
+                    continue;
+                if (target != null) {
+                    if (distance(w, target) <= 1)
+                        attackNearby(w);
+                    else
+                        moveTowards(w, toPos(target));
+                }
+            }
+            return;
+        }
+
+        boolean rushMode = isWorkerRush() || baseUnderThreat();
+        if (rushMode) {
+            _memHarvesters.clear();
+            if (_bases.isEmpty()) {
+                goCombat(_workers, 1);
+                return;
+            }
+            Unit base = _bases.get(0);
+            // Prioritize killing the closest enemy worker to our base.
+            Unit primaryTarget = closestEnemyWorkerToBase();
+            // Assign ALL workers to defense; base-race was losing.
+            List<Unit> sorted = new ArrayList<>(_workers);
+            sorted.sort(Comparator.comparingInt(w -> distance(base, w)));
+            for (Unit w : sorted) {
+                if (busy(w))
+                    continue;
+                Unit target = primaryTarget != null ? primaryTarget : closest(w, _enemies);
+                if (target != null) {
+                    if (distance(w, target) <= 1)
+                        attackNearby(w);
+                    else
+                        moveTowards(w, toPos(target));
+                } else {
+                    // no target: hold a ring around the base
+                    moveTowards(w, toPos(base));
+                }
+            }
+            return;
+        }
+        
+        // Keep two closest workers on defense when we detect a worker rush.
+        if (isWorkerRush()) {
+            _memHarvesters.clear();
+            if (_bb1 != null) {
+                ws.remove(_bb1);
+                if (!busy(_bb1))
+                    goCombat(Collections.singletonList(_bb1), 20);
+            }
+            if (_bb2 != null) {
+                ws.remove(_bb2);
+                if (!busy(_bb2))
+                    goCombat(Collections.singletonList(_bb2), 20);
+            }
+        }
         
         HashMap<Unit, Integer> baseHarCount = new HashMap<>();
         
@@ -795,6 +1069,14 @@ public class alli extends AIWithComputationBudget {
         for (Unit base : _bases) {
             if(busy(base))
                 continue;
+            if (smallMapRushMode() && _gs.getTime() < 400) {
+                produceWherever(base, _utt.getUnitType("Worker"));
+                continue;
+            }
+            if (isWorkerRush() || baseUnderThreat()) {
+                produceWherever(base, _utt.getUnitType("Worker"));
+                continue;
+            }
             int workerPerBase = workerPerBase(base);
             boolean onlyOption = _resources.isEmpty() && ((_p.getResources() - _resourcesUsed) == 1); //todo some workers carry...
             if(onlyOption) {
@@ -861,6 +1143,7 @@ public class alli extends AIWithComputationBudget {
             if (busy(barrack))
                 continue;
             if (baseUnderThreat()) {
+                // Defensive priority: produce ranged units first for immediate response.
                 if (produceCombat(barrack, _utt.getUnitType("Ranged")))
                     continue;
             }
@@ -1021,6 +1304,18 @@ public class alli extends AIWithComputationBudget {
         
         if (_workers.isEmpty())
             return;
+
+        // When rushed by workers, drop a fast defensive barracks next to the closest base.
+        if (isWorkerRush()) {
+            Unit w = closest(_bases.get(0), _workers);
+            if (w != null) {
+                for (int dir : _dirs) {
+                    Pos p = futurePos(w.getX(), w.getY(), dir);
+                    if (validForFutureBuild(p) && produce(w, dir, _utt.getUnitType("Barracks")))
+                        return;
+                }
+            }
+        }
         
         List<Pos> pCandidates = new ArrayList<>();
         for (Unit base : _bases) {
@@ -1207,6 +1502,19 @@ public class alli extends AIWithComputationBudget {
             else if(u.getType().canAttack)
                 _allyCombat.add(u);
         }
+
+        // Reserve two closest workers to the base for bodyblocking when rushed.
+        _bb1 = null;
+        _bb2 = null;
+        if (!_bases.isEmpty() && !_workers.isEmpty()) {
+            Unit base = _bases.get(0);
+            _bb1 = closest(base, _workers);
+            if (_bb1 != null && _workers.size() > 1) {
+                List<Unit> remaining = new ArrayList<>(_workers);
+                remaining.remove(_bb1);
+                _bb2 = closest(base, remaining);
+            }
+        }
         
         _futureBarracks = new ArrayList<>();
         _futureHeavies = 0;
@@ -1281,9 +1589,51 @@ public class alli extends AIWithComputationBudget {
                 tryMoveAway(u, u);
         }
     }
-    
-    @Override
-    public PlayerAction getAction(int player, GameState gs) throws Exception {
+
+    /*
+     * Decide whether Search+LLM should run on this tick.
+     * This lets us tune cost/performance by environment variable.
+     */
+    boolean shouldUseSearchThisTick(int gameTick) {
+        if (!USE_SEARCH_LLM)
+            return false;
+        if (SEARCH_LLM_INTERVAL <= 1)
+            return true;
+        return gameTick - _lastSearchTick >= SEARCH_LLM_INTERVAL;
+    }
+
+    /*
+     * Try to get a Search+LLM action.
+     * Returns null when search is skipped, fails, or gives no concrete command.
+     */
+    PlayerAction trySearchLLMAction(int player, GameState gs) {
+        if (_searchAgent == null)
+            return null;
+        if (!shouldUseSearchThisTick(gs.getTime()))
+            return null;
+
+        try {
+            // Primary decision engine: MCTS guided by LLM priors and goals.
+            PlayerAction searchAction = _searchAgent.getAction(player, gs);
+            _lastSearchTick = gs.getTime();
+
+            // If search returns only TYPE_NONE actions, use rule-based fallback.
+            if (searchAction == null || !searchAction.hasNonNoneActions())
+                return null;
+            return searchAction;
+        } catch (Exception ex) {
+            // Keep failures non-fatal; fallback logic still plays the game.
+            System.err.println("[alli] Search+LLM failed at t=" + gs.getTime() +
+                    ", falling back to rules. Reason: " + ex.getMessage());
+            return null;
+        }
+    }
+
+    /*
+     * Original Alli rule-based policy.
+     * This is intentionally preserved as a robust fallback.
+     */
+    PlayerAction getRuleBasedAction(int player, GameState gs) throws Exception {
         _gs = gs;
         _pgs = gs.getPhysicalGameState();
          _p = gs.getPlayer(player);
@@ -1303,6 +1653,7 @@ public class alli extends AIWithComputationBudget {
         
         workerAction();
         
+        // Workers switch to combat early when defensive conditions trigger.
         if (shouldWorkersAttack())
             goCombat(_workers, 35);
         else
@@ -1318,5 +1669,21 @@ public class alli extends AIWithComputationBudget {
         
         _pa.fillWithNones(gs, player, 1);
         return _pa;
+    }
+
+    /*
+     * Main entry point.
+     * 1) Try Search+LLM first.
+     * 2) If unavailable/empty/error, fallback to original rules.
+     */
+    @Override
+    public PlayerAction getAction(int player, GameState gs) throws Exception {
+        // Search+LLM first to preserve the stronger leaderboard architecture.
+        PlayerAction searchAction = trySearchLLMAction(player, gs);
+        if (searchAction != null)
+            return searchAction;
+
+        // Safe fallback keeps bot behavior reliable in all environments.
+        return getRuleBasedAction(player, gs);
     }
 }   

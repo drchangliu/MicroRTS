@@ -3,7 +3,7 @@
   "display_name": "xiebot",
   "agent_class": "XieBot",
   "agent_file": "XieBot.java",
-  "model_provider": "none",
-  "model_name": "none",
-  "description": "modified NaiveMCTS agent that uses an early LightRush opening strategy and adaptive search budgeting to improve decision making during gameplay"
+  "model_provider": "ollama",
+  "model_name": "llama3.1:8b",
+  "description": "Deterministic 8x8-focused bot with narrow LLM macro control and selective tactical MCTS."
 }
