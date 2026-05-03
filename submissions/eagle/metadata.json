@@ -1,9 +1,0 @@
-{
-  "team_name": "eagle",
-  "display_name": "EAGLE",
-  "agent_class": "EAGLE",
-  "agent_file": "EAGLE.java",
-  "model_provider": "ollama",
-  "model_name": "llama3.1:8b",
-  "description": "LLM-driven RTS agent using structured prompt-based policy. Ensures strict action validity via rule constraints, builds economy with worker-first strategy, enforces deterministic barracks construction using role-based worker assignment, and transitions to army production and attack once infrastructure is established."
-}
