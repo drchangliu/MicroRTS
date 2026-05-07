@@ -15,19 +15,10 @@ import java.net.*;
 import com.google.gson.*;
 import rts.GameState;
 import rts.PhysicalGameState;
-import gui.PhysicalGameStatePanel;
 import rts.UnitAction;
 import rts.Player;
 import rts.PlayerAction;
 import rts.units.*;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.text.SimpleDateFormat;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.util.stream.Collectors;
-import gui.frontend.FEStatePane;
-import rts.Game;
 
 
 /**
@@ -40,27 +31,11 @@ public class EAGLE extends AbstractionLayerAI {
      * Static & non-static variables
      * connected to 2 classes  unitTypeTable & unitType
      */
-
-    // NOTE: TESTING ONLY gmu3r2g need to remove it are better ways to handile it in github
-    //static final String API_KEY =   "   "; /// remove it
-
-
-    // gemini-1.5-flash (15 req/min)
-    // gemini-2.0-flash (15 req/min)
-    // gemini-2.5-flash
-    //String MODEL = "gemini-2.5-flash";
-    String fileName = "Response_format.csv";
-    static final String ENDPOINT_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
     static final JsonObject MOVE_RESPONSE_SCHEMA;
     // How often the LLM should act on the game state
     // NOTE: Fairness is now handled at the game level via ai_decision_interval in config.properties
     // This should be set to 1 so the LLM responds whenever the game asks
-    static final Integer LLM_INTERVAL = 1;
-    LocalDateTime now = LocalDateTime.now();
-    String timestamp = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
-
-    JsonObject wrapper = new JsonObject();
-    //String FilenameXXXten ="";
+    static final Integer LLM_INTERVAL = 50;
     Random r = new Random();
     protected UnitTypeTable utt; // different class
     UnitType resourceType;
@@ -70,25 +45,12 @@ public class EAGLE extends AbstractionLayerAI {
     UnitType rangedType;
     UnitType baseType;
     UnitType barracksType;
-    int totalMovesGenerated = 0;
-    int totalMovesAccepted = 0;
-    int totalMovesRejected = 0;
-    int promptstart =0;
-    FileWriter writer;
-    int jj =0;
     Instant promptTime;
     Instant responseTime;
-    int TotalTokens = 0;
-    int requestTokens =0;
-    int responseTokens=0;
     long Latency =0;
-    int totalTokens =0;
     String num_shot ="One-Shot";
     String aiName1= "";
     String aiName2="";
-    String fileName01 ="";
-    String value_TimestampandScore = "";
-    private boolean logsInitialized = false;
     private boolean logsInitializedone = false;
 
     // ==== OLLAMA CONFIG ====
@@ -440,7 +402,7 @@ Each move must include:
 
 INPUT:
 Map size: 8x8
-Turn: 10/5000
+Turn: 10
 Max actions: 4
 Feature locations:
 (2, 1) Ally Base Unit {resources=3, current_action="idling", HP=10}
@@ -468,7 +430,7 @@ OUPUT:
 
 INPUT:
 Map size: 8x8
-Turn: 70/5000
+Turn: 70
 Max actions: 4
 Feature locations:
 (0, 0) Neutral Resource Node {resources=17}
@@ -512,7 +474,7 @@ Here are the rewritten rules for the current game state:
 
 INPUT:
 Map size: 8x8
-Turn: 150/5000
+Turn: 150
 Max actions: 4
 Feature locations:
 (0, 0) Neutral Resource Node {resources=9}
@@ -557,7 +519,7 @@ OUTPUT:
 
 INPUT:
 Map size: 8x8
-Turn: 180/5000
+Turn: 180
 Max actions: 4
 Feature locations:
 (0, 0) Neutral Resource Node {resources=10}
@@ -614,16 +576,11 @@ INPUT:
         try {
             String loadedPrompt = java.nio.file.Files.readString(path, java.nio.charset.StandardCharsets.UTF_8);
             if (loadedPrompt == null || loadedPrompt.trim().isEmpty()) {
-                System.err.println("Prompt file is empty: " + path.toAbsolutePath() + " -> fallback DEFAULT_PROMPT");
                 PROMPT = DEFAULT_PROMPT;
             } else {
                 PROMPT = loadedPrompt;
-                System.out.println("Loaded prompt from: " + path.toAbsolutePath());
             }
         } catch (Exception e) {
-            System.err.println("Failed to read prompt file: " + path.toAbsolutePath());
-            System.err.println("Reason: " + e.getMessage());
-            System.err.println("-> fallback DEFAULT_PROMPT");
             PROMPT = DEFAULT_PROMPT;
         }
         return PROMPT;
@@ -731,8 +688,6 @@ INPUT:
         JsonObject responseSchema = parser.parse(schemaJson).getAsJsonObject();
         MOVE_RESPONSE_SCHEMA.add("response_schema", responseSchema);
 
-        System.out.println("responseSchema  270 :  gmu3r2g  -> "+responseSchema);
-
     }
 
     // is there any other way to give prompt in a better way to give Free to it ?
@@ -749,35 +704,6 @@ INPUT:
      */
     public EAGLE(UnitTypeTable a_utt) {
         this(a_utt, new AStarPathFinding());
-
-        //
-        System.out.println(" in this 1 st nd mg546924 288   ----- >  Y / N ");
-        String timestamp1 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date());
-       //  FilenameXXXten = "LLmGemini_"+timestamp1+".json";
-        // this is also good i gess
-        // String fileName01 = "Response_format_02"+".csv";
-
-        //best place file name
-
-
-        /**
-         * try {
-         *             fileName01 = createFileName();
-         *         } catch (Exception e) {
-         *             throw new RuntimeException(e);
-         *         }
-         *
-         *         System.out.println("--->   341   "+fileName01);
-         *
-         *         try (FileWriter writer = new FileWriter(fileName01)) {
-         *             // Header row
-         *             writer.append("Thinking,Moves,Feature locations,Request Time, Request / Prompt Tokens, response Time, Response Tokens, Latency(milliseconds),Total Tokens,Score_in_every_run\n");
-         *
-         *
-         *         } catch (IOException e) {
-         *             System.err.println(" Error writing CSV: " + e.getMessage());
-         *         }
-         */
     }
 
     public EAGLE(UnitTypeTable a_utt,String aiName1, String aiName2){
@@ -785,8 +711,6 @@ INPUT:
         if((aiName1 != null && aiName2 != null) && (!(aiName1.isEmpty())  || !(aiName2.isEmpty())) && logsInitializedone != true) {
             this.aiName1 = aiName1;
             this.aiName2 = aiName2;
-            System.out.println("aiName1 - 23 " + aiName1);
-            System.out.println("aiName2 - 23" + aiName2);
             logsInitializedone = true;
         }
     }
@@ -798,90 +722,8 @@ INPUT:
      */
     public EAGLE(UnitTypeTable a_utt, PathFinding a_pf) {
         super(a_pf); //
-        System.out.println(" in this 2 nd mg546924 180 "+ a_utt);
         reset(a_utt); // method call
     }
-
-
-    /**
-     *
-     */
-    public String createFileName() throws Exception {
-        System.out.println("aiName1 "+this.aiName1+" "+this.aiName2+" "+aiName2+" "+aiName1);
-        return "Response"+timestamp+"_"+this.aiName1+"_"+num_shot+"_"+this.aiName2+"_"+MODEL+".csv";
-    }
-
-    /**
-     * Methods
-     */
-
-    /**
-     * @method :  logEndGameMetrics
-     *
-     * head a issue check it will work properly are not write now we are adding json responses
-     * this format is bad need to update
-     *
-     */
-    private void logEndGameMetrics() {
-        System.out.println(" 158 check gmu3r2g");
-
-        JsonObject metrics = new JsonObject();
-        metrics.addProperty("moves_generated", totalMovesGenerated);
-        metrics.addProperty("moves_accepted", totalMovesAccepted);
-        metrics.addProperty("moves_rejected", totalMovesRejected);
-
-        JsonObject totals = new JsonObject();
-        totals.addProperty("total_moves_generated", totalMovesGenerated);
-        totals.addProperty("total_moves_accepted", totalMovesAccepted);
-        totals.addProperty("total_moves_rejected", totalMovesRejected);
-
-        JsonObject wrapper = new JsonObject();
-        wrapper.add("player_final_stats", metrics);
-        wrapper.add("game_metrics", totals);
-
-
-        String timestamp = java.time.LocalDateTime.now()
-                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS"));
-        wrapper.addProperty("end_time", timestamp);
-
-        try (FileWriter writer = new FileWriter("game_summary.json", true)) {
-            System.out.println(" am i in : 245 LLM _gemini ");
-            writer.write(new GsonBuilder().setPrettyPrinting().create().toJson(wrapper));
-            writer.write(System.lineSeparator());
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-
-
-
-
-    private void initLogsIfNeeded() {
-        System.out.println(" initLogsIfNeeded  ~~~~  ~~ ~ ~");
-        if (logsInitialized) return;
-
-        // Fallback labels if names weren’t injected
-        String a = (aiName1 == null || aiName1.isEmpty()) ? "LLM_Gemini" : aiName1;
-        String b = (aiName2 == null || aiName2.isEmpty()) ? "RandomBiasedAI" : aiName2;
-
-
-        // Build names once
-        String ts = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new java.util.Date());
-        fileName01 = "Response" + ts + "_" + a + "_" + num_shot + "_" + b + "_" + MODEL + ".csv";
-       // FilenameXXXten = "LLM_Gemini_" + ts + ".json";
-
-        try (FileWriter writer = new FileWriter(fileName01)) {
-            writer.append("Thinking,Moves,Feature locations,Request Time, Request / Prompt Tokens, response Time, Response Tokens, Latency(milliseconds),Total Tokens,Score_in_every_run\n");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        logsInitialized = true;
-    }
-
-
-
 
 
     /**
@@ -926,7 +768,7 @@ INPUT:
 
     @Override
     public AI clone() {
-        return new ollama(utt, pf);
+        return new EAGLE(utt, pf);
     }
 
 
@@ -941,22 +783,13 @@ INPUT:
 
     @Override
     public PlayerAction getAction(int player, GameState gs) throws Exception {
-        // make sure filenames/log headers exist
-        initLogsIfNeeded();
 
         String finalPrompt;
 
-        System.out.println(" [EAGLE.getAction] start ");
-
         // If we're NOT on an LLM turn, just keep executing the abstract actions already assigned
         if (gs.getTime() % LLM_INTERVAL != 0) {
-            if (gs.gameover()) {
-                logEndGameMetrics();
-            }
 
             PlayerAction pa = translateActions(player, gs);
-            System.out.println("🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:");
-            System.out.println(pa);
             return pa;
         }
 
@@ -1022,17 +855,10 @@ INPUT:
 
         // Map summary for the LLM
         String mapPrompt         = "Map size: " + width + "x" + height;
-        String turnPrompt        = "Turn: " + gs.getTime() + "/" + 5000;
+        String turnPrompt        = "Turn: " + gs.getTime();
         String maxActionsPrompt  = "Max actions: " + maxActions;
-        value_TimestampandScore  = PhysicalGameStatePanel.info1;
 
         String featuresPrompt = "Feature locations:\n" + String.join("\n", features);
-
-        // Also build a JSON-ish array string version of features for CSV logging later
-        String[] lines = featuresPrompt.split("\n");
-        String arrayFormat = Arrays.stream(lines)
-                .map(s -> "\"" + s.replace("\"", "\\\"") + "\"")
-                .collect(Collectors.joining(", ", "[", "]"));
 
         // Final LLM prompt
         finalPrompt = getBasePrompt() + "\n\n" +
@@ -1041,46 +867,15 @@ INPUT:
                 maxActionsPrompt + "\n\n" +
                 featuresPrompt + "\n";
 
-       // System.out.println("=== Prompt to LLM ===");
-       // System.out.println(finalPrompt);
-       // System.out.println("=====================");LLM returned String as expected
-
-        // ===== Call the model (Ollama in your current version) =====
         String response = prompt(finalPrompt);
-        System.out.println("=== Raw LLM Response ===");
-        System.out.println(response);
-        System.out.println("========================");
-
-        if (response instanceof String) {
-            System.out.println("LLM returned String as expected.");
-        }
         // ===== Parse model JSON safely & log pretty copy =====
         JsonObject jsonResponse = parseJsonStrictThenLenient(response);
-
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
-        String prettyJson = gson.toJson(jsonResponse);
-
-        /**
-        try (FileWriter file = new FileWriter(FilenameXXXten, true)) {
-            String tsNow = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date());
-            file.write("[" + tsNow + "]\n");
-            file.write(prettyJson);
-            file.write(System.lineSeparator());
-        } catch (IOException e) {
-            e.printStackTrace();
-        } */
 
         // ===== Extract "moves" array from model output =====
         JsonArray moveElements = jsonResponse.getAsJsonArray("moves");
 
         if (moveElements == null || moveElements.size() == 0) {
-            System.out.println("[LLM] No moves[] in response. Falling back to translateActions.");
-            if (gs.gameover()) {
-                logEndGameMetrics();
-            }
             PlayerAction fallbackPA = translateActions(player, gs);
-            System.out.println("🎯 translateActions() (no LLM moves) =>");
-            System.out.println(fallbackPA);
             return fallbackPA;
         }
 
@@ -1088,7 +883,6 @@ INPUT:
         for (JsonElement moveElement : moveElements) {
             try {
                 if (!moveElement.isJsonObject()) {
-                    System.out.println("[LLM] skipping non-object move element: " + moveElement);
                     continue;
                 }
 
@@ -1096,7 +890,6 @@ INPUT:
 
                 // --- Validate unit_position ---
                 if (!move.has("unit_position") || !move.get("unit_position").isJsonArray()) {
-                    System.out.println("[LLM] skipping move, missing unit_position: " + move);
                     continue;
                 }
 
@@ -1105,8 +898,6 @@ INPUT:
                         unitPosition.size() < 2 ||
                         unitPosition.get(0).isJsonNull() ||
                         unitPosition.get(1).isJsonNull()) {
-
-                    System.out.println("[LLM] skipping move, bad unit_position: " + unitPosition);
                     continue;
                 }
 
@@ -1116,19 +907,16 @@ INPUT:
                 // --- Look up the unit in the game ---
                 Unit unit = pgs.getUnitAt(unitX, unitY);
                 if (unit == null) {
-                    System.out.println("❌ No unit at (" + unitX + ", " + unitY + ") - skipping move.");
                     continue;
                 }
 
                 // cannot command enemy / neutral units
                 if (unit.getPlayer() != player) {
-                    System.out.println("  ----->   Can't command non-owned unit at (" + unitX + ", " + unitY + ") - skipping.");
                     continue;
                 }
 
                 // --- Required action fields ---
                 if (!move.has("action_type") || !move.has("raw_move")) {
-                    System.out.println("[LLM] skipping move, missing action_type/raw_move: " + move);
                     continue;
                 }
 
@@ -1138,19 +926,12 @@ INPUT:
                         ? move.get("unit_type").getAsString()
                         : "unknown";
 
-                System.out.println(
-                        " Applying LLM move: " + rawMove +
-                                " | action_type=" + actionType +
-                                " | unit=(" + unitX + "," + unitY + ") type=" + unitType
-                );
-
                 // We'll parse text like "(2,1): worker move((3,1))"
                 // using regex per action type, then call the abstraction-layer helpers
                 switch (actionType) {
                     case "move": {
                         // structures can't move
                         if (unit.getType() == baseType || unit.getType() == barracksType) {
-                            System.out.println("'move' failed: structure at ("+unitX+", "+unitY+")");
                             break;
                         }
 
@@ -1164,17 +945,13 @@ INPUT:
                             int targetY = Integer.parseInt(matcher.group(2));
                             move(unit, targetX, targetY);
                         } else {
-                            System.out.println("'move' regex no match for: " + rawMove);
                         }
-
-                        if (gs.gameover()) logEndGameMetrics();
                         break;
                     }
 
                     case "harvest": {
                         // workers only
                         if (unit.getType() != workerType) {
-                            System.out.println("'harvest' failed: non-worker at ("+unitX+", "+unitY+")");
                             break;
                         }
 
@@ -1195,20 +972,15 @@ INPUT:
                             if (resourceUnit != null && baseUnit != null) {
                                 harvest(unit, resourceUnit, baseUnit);
                             } else {
-                                System.out.println("'harvest' failed: couldn't resolve resource/base units");
                             }
                         } else {
-                            System.out.println("'harvest' regex no match for: " + rawMove);
                         }
-
-                        if (gs.gameover()) logEndGameMetrics();
                         break;
                     }
 
                     case "train": {
                         // only base or barracks can train
                         if ((unit.getType() != baseType) && (unit.getType() != barracksType)) {
-                            System.out.println("'train' failed: not base/barracks at ("+unitX+", "+unitY+")");
                             break;
                         }
 
@@ -1222,17 +994,13 @@ INPUT:
                             UnitType trainUnitType = stringToUnitType(stringTrainUnitType);
                             train(unit, trainUnitType);
                         } else {
-                            System.out.println("'train' regex no match for: " + rawMove);
                         }
-
-                        if (gs.gameover()) logEndGameMetrics();
                         break;
                     }
 
                     case "build": {
                         // only workers can build
                         if (unit.getType() != workerType) {
-                            System.out.println("'build' failed: non-worker at ("+unitX+", "+unitY+")");
                             break;
                         }
 
@@ -1248,10 +1016,7 @@ INPUT:
                             UnitType unitBuildType = stringToUnitType(stringBuildUnitType);
                             build(unit, unitBuildType, buildX, buildY);
                         } else {
-                            System.out.println("'build' regex no match for: " + rawMove);
                         }
-
-                        if (gs.gameover()) logEndGameMetrics();
                         break;
                     }
 
@@ -1269,33 +1034,24 @@ INPUT:
                             if (enemyUnit != null) {
                                 attack(unit, enemyUnit);
                             } else {
-                                System.out.println("'attack' failed: no enemy at ("+enemyX+","+enemyY+")");
                             }
                         } else {
-                            System.out.println("'attack' regex no match for: " + rawMove);
                         }
-
-                        if (gs.gameover()) logEndGameMetrics();
                         break;
                     }
 
                     case "idle": {
                         idle(unit);
-                        if (gs.gameover()) logEndGameMetrics();
                         break;
                     }
 
                     default: {
-                        System.out.println("Unknown action_type '" + actionType + "', skipping.");
-                        if (gs.gameover()) logEndGameMetrics();
                         break;
                     }
                 }
 
             } catch (Exception ex) {
                 // CRITICAL: swallow bad move so AI doesn't crash the whole game
-                System.out.println("[LLM] Exception applying a move: " + ex.getMessage());
-                ex.printStackTrace();
                 // continue to next move
             }
         }
@@ -1324,587 +1080,14 @@ INPUT:
 
             if (closestEnemy != null && closestDistance == 1) {
                 if (getAbstractAction(u1) == null) {
-                    System.out.println("Auto-attack: " + u1 + " -> " + closestEnemy);
                     attack(u1, closestEnemy);
                 } else {
-                    System.out.println("⚠️ Skipping auto-override for " + u1 +
-                            " (already has LLM action)");
                 }
             }
         }
-
-        // ===== Logging & CSV append =====
-        totalMovesGenerated++;
-        totalMovesAccepted++;
-
-        System.out.println("gs.gameover() = " + gs.gameover());
-        Player p0 = gs.getPlayer(0);
-        Player p1 = gs.getPlayer(1);
-        int currentTime = gs.getTime();
-
-        System.out.println("Running getAction for Player: " + player);
-        System.out.println(" current time " + currentTime + " p0 " + p0 + " p1 " + p1);
-
-        String combinestring = "T : " + currentTime + "," + p0 + "," + p1;
-
-        try (FileWriter writer = new FileWriter(fileName01, true)) {
-            if (response.indexOf("\"thinking\"") != -1 &&
-                    response.indexOf("\"moves\"")    != -1) {
-
-                String beforeMoves = response.substring(
-                        response.indexOf("\"thinking\"") + 11,
-                        response.indexOf("\"moves\"")
-                );
-                String fromMoves   = response.substring(
-                        response.indexOf("\"moves\"")
-                );
-
-                String csvSafeThinking   = escapeForCSV(beforeMoves);
-                String csvSafeMoves      = escapeForCSV(fromMoves);
-                String csvSafeFeatures   = escapeForCSV(arrayFormat);
-                String csvSafeTimestamp  = escapeForCSV(combinestring);
-                String csvSafeScoreBlock = escapeForCSV(value_TimestampandScore);
-
-                writer.append(csvSafeThinking).append(",")
-                        .append(csvSafeMoves).append(",")
-                        .append(csvSafeFeatures).append(",")
-                        .append(promptTime != null ? promptTime.toString() : "")
-                        .append(",")
-                        .append(String.valueOf(requestTokens)).append(",")
-                        .append(responseTime != null ? responseTime.toString() : "")
-                        .append(",")
-                        .append(String.valueOf(responseTokens)).append(",")
-                        .append(String.valueOf(Latency)).append(",")
-                        .append(String.valueOf(totalTokens)).append(",")
-                        .append(csvSafeScoreBlock)
-                        .append("\n");
-            } else {
-                System.out.println("CSV logging: keywords not found in response.");
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-            System.err.println("error writing CSV row: " + e.getMessage());
-        }
-
-        System.out.printf(
-                "T: %d, P0: %d (%s), P1: %d (%s)%n",
-                currentTime,
-                p0.getID(), p0.getResources(),
-                p1.getID(), p1.getResources()
-        );
-
-        if (gs.gameover()) {
-            logEndGameMetrics();
-        }
-
         // ===== Return the final PlayerAction for this frame =====
         PlayerAction pa = translateActions(player, gs);
-        System.out.println("🎯 Final translateActions() PlayerAction:");
-        System.out.println(pa);
         return pa;
-    }
-
-
-
-    /*
-
-    @Override
-    public PlayerAction getAction(int player, GameState gs) throws Exception {
-        initLogsIfNeeded();
-
-        //   i will give file name over hear ;
-
-
-
-
-
-
-        String finalPrompt;
-        System.out.println(" in line number 222 gmu3r2g ");
-        // Units are told to continue their abstraction actions until the LLM issues new ones
-        if (gs.getTime() % LLM_INTERVAL != 0) {
-            if (gs.gameover()) {
-                logEndGameMetrics();
-            }
-            // remove this  from heare
-            PlayerAction pa = translateActions(player, gs);
-            System.out.println("🎯406  translateActions() generated PlayerAction:");
-            System.out.println(pa);
-            return pa;
-            // till heare
-            // return translateActions(player, gs); need to add
-        }
-
-        PhysicalGameState pgs = gs.getPhysicalGameState();
-        int width = pgs.getWidth();
-        int height = pgs.getHeight();
-        Player p = gs.getPlayer(player);
-
-        // IF AN ABSTRACT ACTION IS ISSUED, UNITS WILL KEEP DOING THAT ACTION UNTIL:
-        // - THE ACTION IS FINISHED
-        // - THEY DIE
-        // - IDLE IS CALLED ON UNIT
-
-        ArrayList<String> features = new ArrayList<>();
-
-        int maxActions = 0;
-
-        for (Unit u : pgs.getUnits()) {
-            if (u.getPlayer() == player) { maxActions++; }
-
-            String unitStats;
-            UnitAction unitAction = gs.getUnitAction(u);
-            String unitActionString = unitActionToString(unitAction);
-
-            String unitType;
-
-            if (u.getType() == resourceType) {
-                unitType = "Resource Node";
-                unitStats = "{resources=" + u.getResources() + "}";
-            } else if (u.getType() == baseType) {
-                unitType = "Base Unit";
-                unitStats = "{resources=" + p.getResources() + ", current_action=\"" + unitActionString + "\", HP=" + u.getHitPoints() + "}";
-            } else if (u.getType() == barracksType) {
-                unitType = "Barracks Unit";
-                unitStats = "{current_action=\"" + unitActionString + "\", HP=" + u.getHitPoints() + "}";
-            } else if (u.getType() == workerType) {
-                unitType = "Worker Unit";
-                unitStats = "{current_action=\"" + unitActionString + "\", HP=" + u.getHitPoints() + "}";
-            } else if (u.getType() == lightType) {
-                unitType = "Light Unit";
-                unitStats = "{current_action=\"" + unitActionString + "\", HP=" + u.getHitPoints() + "}";
-            } else if (u.getType() == heavyType) {
-                unitType = "Heavy Unit";
-                unitStats = "{current_action=\"" + unitActionString + "\", HP=" + u.getHitPoints() + "}";
-            } else if (u.getType() == rangedType) {
-                unitType = "Ranged Unit";
-                unitStats = "{current_action=\"" + unitActionString + "\", HP=" + u.getHitPoints() + "}";
-            } else {
-                unitType = "Unknown";
-                unitStats = "{}";
-            }
-
-            String unitPos = "(" + u.getX() + ", " + u.getY() + ")";
-            String team = u.getPlayer() == player ? "Ally" : "Enemy";
-            if (u.getType() == resourceType) { team = "Neutral"; }
-
-            features.add(unitPos + " " + team + " " + unitType + " " + unitStats);
-        }
-
-        // Map size neccessary to inform LLM of movement restrictions
-        String mapPrompt = "Map size: " + width + "x" + height;
-
-        // Inclusion of turn number provides LLM with temporal context (depends if chats are reused)
-        String turnPrompt = "Turn: " + gs.getTime() + "/" + 5000;
-        value_TimestampandScore = PhysicalGameStatePanel.info1;
-
-        // Helps prevent LLM from issuing more commands than units available
-        String maxActionsPrompt = "Max actions: " + maxActions;
-
-        // Opted to include a list of feature locations instead of a 2D array, because LLMs suffer with spatial inputs.
-        // This excludes information like empty tiles which don't constitute much information.
-        String featuresPrompt = "Feature locations:\n" + String.join("\n", features);
-
-        System.out.println(" 469  ----------------------------------- \n featuresPrompt :  ");
-        System.out.println(featuresPrompt);
-        String[] lines = featuresPrompt.split("\n");
-
-        String arrayFormat = Arrays.stream(lines)
-                .map(s -> "\"" + s.replace("\"", "\\\"") + "\"") // Escape internal quotes
-                .collect(Collectors.joining(", ", "[", "]"));
-
-        System.out.println(arrayFormat);
-        System.out.println(" ----------------------------------- ");
-
-
-        // need to do in other way as off now llm
-        // prompt will be passed only once so that we can save tokens
-        if(promptstart == 0) {
-            finalPrompt = getBasePrompt() + "\n\n" + mapPrompt + "\n" + turnPrompt + "\n" + maxActionsPrompt + "\n\n" + featuresPrompt + "\n";
-            promptstart = promptstart+1;
-        }
-        else{
-            finalPrompt =  mapPrompt + "\n" + turnPrompt + "\n" + maxActionsPrompt + "\n\n" + featuresPrompt + "\n";
-        }
-
-        //  need to implement they  Context caching process
-
-
-        finalPrompt = getBasePrompt() + "\n\n" + mapPrompt + "\n" + turnPrompt + "\n" + maxActionsPrompt + "\n\n" + featuresPrompt + "\n";
-
-        System.out.println(" gmu3r2g 344 3  -----------------------------------  \n ");
-        System.out.println(finalPrompt);
-        System.out.println("  : gmu3r2g 3421  ----------------------------------- ");
-        System.out.println("mapPrompt"+mapPrompt);
-        System.out.println("value_TimestampandScore"+value_TimestampandScore);
-        System.out.println("  -> gmu3r2g 3421  ----------------------------------- ");
-        System.out.println("turnPrompt"+turnPrompt);
-        System.out.println("  --> gmu3r2g 3421  ----------------------------------- ");
-        System.out.println("maxActionsPrompt"+maxActionsPrompt);
-        System.out.println("featuresPrompt"+featuresPrompt);
-        System.out.println("   -+  > gmu3r2g 3421  ----------------------------------- ");
-
-        // Prompt gemini
-        String response = prompt(finalPrompt);
-        System.out.println(" 476  ----------------------------------- ");
-
-        System.out.println(response);
-        if(response instanceof String)
-            System.out.println(" it is a string 530 llm gemini  ");
-
-
-        // Data rowsint
-
-
-
-        System.out.println("✅ CSV written successfully: " + fileName);
-
-        System.out.println(" 479   ----------------------------------- ");
-        // JsonParser parser = new JsonParser();
-        JsonObject jsonResponse = parseJsonStrictThenLenient(response);
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
-        String prettyJson = gson.toJson(jsonResponse);
-
-        try (FileWriter file = new FileWriter(FilenameXXXten, true)) {
-            String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date());
-            file.write("[" + timestamp + "]\n");
-            file.write(prettyJson);
-            file.write(System.lineSeparator());
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        JsonArray moveElements = jsonResponse.getAsJsonArray("moves");
-
-        // Parse moves
-
-        // Loop through the response and handle each move
-        for (JsonElement moveElement : moveElements) {
-            JsonObject move = moveElement.getAsJsonObject();
-            JsonArray unitPosition = move.getAsJsonArray("unit_position");
-
-            // Retrieve the unit based on position
-            int unitX = unitPosition.get(0).getAsInt();
-            int unitY = unitPosition.get(1).getAsInt();
-            Unit unit = pgs.getUnitAt(unitX, unitY);
-
-            if (unit == null) {
-                System.out.println(" ❌ No unit found at position (" + unitX + ", " + unitY + ")   --------------- investigate as json fail are 1 move is fail ");
-                continue; // Skip this move
-            }
-
-            if (unit.getPlayer() != player) {
-                System.out.println("Cannot issue action to neutral/enemy unit ("+unitX+", "+unitY+")");
-                continue;
-            }
-
-            String actionType = move.get("action_type").getAsString();
-            String unitType = move.get("unit_type").getAsString();
-
-            String rawMove = move.get("raw_move").getAsString();
-            Pattern pattern;
-            Matcher matcher;
-
-
-
-            if (unit == null) {
-                System.out.println("Action failed: No unit found at position (" + unitX + ", " + unitY + ")");
-                break;
-            }
-
-
-            System.out.println("  LLM  532 ---------------------   ");
-            System.out.println(" 556 -  : -> "+actionType);
-            System.out.println("  ---------------------  start of switch  ");
-            // Handle each action type
-            switch (actionType) {
-                case "move":
-                    System.out.println(" gmu3r2g 561  move   : --- gm1 ");
-                    System.out.println("  unit.getType()  : " + unit.getType()+" : baseType :  "+baseType+" barracksType "+barracksType);
-                    if (unit.getType() == baseType || unit.getType() == barracksType) {
-                        System.out.println("'move' failed because unit ("+unitX+", "+unitY+") is a base or barracks");
-                    }
-
-                    pattern = Pattern.compile("\\(\\s*\\d+,\\s*\\d+\\):.*?move\\(\\(\\s*(\\d+),\\s*(\\d+)\\s*\\)\\)");
-                    matcher = pattern.matcher(rawMove);
-                    System.out.println(" pattern :  "+pattern+"  matcher : "+matcher);
-
-                    if (matcher.find()) {
-                        int targetX = Integer.parseInt(matcher.group(1));
-                        int targetY = Integer.parseInt(matcher.group(2));
-                        System.out.println(" targetx :  "+targetX+"  targetY : "+targetY);
-
-
-                        move(unit, targetX, targetY);
-                    } else {
-                        System.out.println("'move' regex failed to match for raw_move: " + rawMove);
-                    }
-                    if (gs.gameover()) {
-                        logEndGameMetrics();
-                    }
-
-                    break;
-
-                case "harvest":
-
-                    System.out.println(" gmu3r2g 589   harvest    : --- gm2 ");
-                    System.out.println("  unit.getType()  : " + unit.getType().name+" : baseType :  "+workerType.name);
-
-                    if (unit.getType() != workerType) {
-                        System.out.println("'harvest' failed because unit ("+unitX+", "+unitY+") is not a worker");
-                    }
-                    // Parse the resource position and ally base position for harvest action
-
-                    pattern = Pattern.compile("\\(\\s*\\d+,\\s*\\d+\\):.*?harvest\\(\\((\\d+),\\s*(\\d+)\\),\\s*\\((\\d+),\\s*(\\d+)\\)\\)");
-                    matcher = pattern.matcher(rawMove);
-
-                    System.out.println(" pattern :  "+pattern+" :  matcher : "+matcher);
-                    System.out.println(" gmu3r2g 604  train  end   : --- ");
-
-                    System.out.println(" gmu3r2g 590  harvest  : --- ");
-                    if (matcher.find()) {
-                        System.out.println(" matcher 605 true  ");
-                        int resourceX = Integer.parseInt(matcher.group(1));
-                        int resourceY = Integer.parseInt(matcher.group(2));
-                        System.out.println(" resourceX"+resourceX); // 0
-                        System.out.println(" resourceY"+resourceY);  //0
-                        Unit resourceUnit = pgs.getUnitAt(resourceX, resourceY);
-
-                        int baseX = Integer.parseInt(matcher.group(3));
-                        int baseY = Integer.parseInt(matcher.group(4));
-                        System.out.println(" baseX"+baseX); // 2
-                        System.out.println(" baseY"+baseY); // 1
-
-                        Unit baseUnit = pgs.getUnitAt(baseX, baseY);
-
-                        if (resourceUnit != null && baseUnit != null) {
-                            System.out.println("  --->  inside 620 which means able to how  resourses and base is located ");
-                            System.out.println("unit type: " + unit.getType().name);
-                            System.out.println("resource type: " + resourceUnit.getType().name);
-                            System.out.println("base type: " + baseUnit.getType().name);
-                            harvest(unit, resourceUnit, baseUnit);
-                            System.out.println("unit type: " + unit.getType().name);
-                            System.out.println("resource type: " + resourceUnit.getType().name);
-                            System.out.println("base type: " + baseUnit.getType().name);
-                        }
-                    } else {
-                        System.out.println("'harvest' regex failed to match for raw_move: " + rawMove);
-                    }
-                    if (gs.gameover()) {
-                        logEndGameMetrics();
-                    }
-
-                    break;
-
-                case "train":
-
-                    System.out.println(" gmu3r2g 604  train   : ---  gm3 ");
-                    System.out.println("  unit.getType()  : " + unit.getType().name+" : baseType :  "+baseType.name);
-
-                    System.out.println(" unit.getType()  "+unit.getType().name+" :  +barracksType:  "+barracksType.name);
-                    System.out.println(" gmu3r2g 604  train  end   : --- ");
-
-                    if ((unit.getType() != baseType) && (unit.getType() != barracksType)) {
-                        System.out.println("'train' failed because unit ("+unitX+", "+unitY+") is not a base or barracks");
-                    }
-
-                    pattern = Pattern.compile("\\(\\s*\\d+,\\s*\\d+\\):.*?train\\(\\s*['\"]?(\\w+)['\"]?\\s*\\)");
-                    matcher = pattern.matcher(rawMove);
-                    System.out.println(" 645 : pattern : "+pattern+" : matcher"+matcher);
-
-                    if (matcher.find()) {
-                        String stringTrainUnitType = matcher.group(1);
-                        System.out.println(" stringTrainUnitType  = "+stringTrainUnitType);
-                        UnitType trainUnitType = stringToUnitType(stringTrainUnitType);
-                        train(unit, trainUnitType);
-                    } else {
-                        System.out.println("'train' regex failed to match for raw_move: " + rawMove);
-                    }
-                    if (gs.gameover()) {
-                        logEndGameMetrics();
-                    }
-                    break;
-
-                case "build":
-                    System.out.println(" gmu3r2g 662  build   : --- gm4 ");
-                    if (unit.getType() != workerType) {
-                        System.out.println("'build' failed because unit ("+unitX+", "+unitY+") is not a worker");
-                    }
-
-                    pattern = Pattern.compile("\\(\\s*\\d+,\\s*\\d+\\):.*?build\\(\\s*\\(\\s*(\\d+),\\s*(\\d+)\\s*\\),\\s*['\"]?(\\w+)['\"]?\\s*\\)");
-                    matcher = pattern.matcher(rawMove);
-
-                    if (matcher.find()) {
-                        int buildX = Integer.parseInt(matcher.group(1));
-                        int buildY = Integer.parseInt(matcher.group(2));
-                        String stringBuildUnitType = matcher.group(3);
-                        UnitType unitBuildType = stringToUnitType(stringBuildUnitType);
-                        build(unit, unitBuildType, buildX, buildY);
-                    } else {
-                        System.out.println("'build' regex failed to match for raw_move: " + rawMove);
-                    }
-                    if (gs.gameover()) {
-                        logEndGameMetrics();
-                    }
-
-                    break;
-
-                case "attack":
-                    System.out.println(" gmu3r2g 662  attack   : --------  gm5");
-                    // Parse the target enemy position for the attack action
-                    pattern = Pattern.compile("\\(\\s*\\d+,\\s*\\d+\\):.*?attack\\(\\s*\\(\\s*(\\d+),\\s*(\\d+)\\s*\\)\\s*\\)");
-                    matcher = pattern.matcher(rawMove);
-
-                    if (matcher.find()) {
-                        int enemyX = Integer.parseInt(matcher.group(1));
-                        int enemyY = Integer.parseInt(matcher.group(2));
-                        Unit enemyUnit = pgs.getUnitAt(enemyX, enemyY);
-
-                        if (enemyUnit != null) {
-                            attack(unit, enemyUnit);
-                        }
-                    } else {
-                        System.out.println("'attack' regex failed to match for raw_move: " + rawMove);
-                    }
-                    if (gs.gameover()) {
-                        logEndGameMetrics();
-                    }
-
-                    break;
-
-                case "idle":
-                    System.out.println(" gmu3r2g 709  idle   : --------  gm6");
-
-                    idle(unit);
-                    if (gs.gameover()) {
-                        logEndGameMetrics();
-                    }
-                    break;
-
-                default:
-                    System.out.println(" gmu3r2g 718  default   : --------   gm99 ");
-                    System.out.println("Unknown action type: " + actionType);
-                    if (gs.gameover()) {
-                        logEndGameMetrics();
-                    }
-                    break;
-            }
-            System.out.println("  ---------------------  end of switch  ");
-        }
-
-        // The LLM struggles to attack enemy units because it can only issue actions on intervals so-
-        // if any unit is in danger, it will automatically attack the nearest enemy.
-        // This behavior is default for many other hard-coded bots, and is just another abstraction we-
-        // will make the the LLM.
-        // This overrides the existing action if the unit was issued one
-
-
-
-        for (Unit u1 : pgs.getUnits()) {
-            Unit closestEnemy = null;
-            int closestDistance = 0;
-            System.out.println(" u1.getPlayer() : "+u1.getPlayer()+" player : "+player+" u1.getType().canAttack"+u1.getType().canAttack);
-            if ((u1.getPlayer() != player) && u1.getType().canAttack) { continue; }
-
-            for (Unit u2 : pgs.getUnits()) {
-                System.out.println("  u2.getPlayer() "+u2.getPlayer()+" player :"+player);
-                if (u2.getPlayer() == player) { continue; }
-
-                int d = Math.abs(u2.getX() - u1.getX()) + Math.abs(u2.getY() - u1.getY());
-                System.out.println(" d : "+d+" closestEnemy "+closestEnemy+" closestDistance+ :"+closestDistance+" u2 :"+u2+" d : "+d);
-                if (closestEnemy == null || d < closestDistance) {
-                    closestEnemy = u2;
-                    closestDistance = d;
-                }
-            }
-
-            if (closestEnemy != null && closestDistance == 1) {
-                if (getAbstractAction(u1) == null) { // ✅ Only attack if no action was set by LLM
-                    System.out.println("Attacking nearest unit!");
-                    attack(u1, closestEnemy);
-                } else {
-                    System.out.println("⚠️ Skipping override for " + u1 + " (already has action)");
-                }
-            }
-
-        }
-
-        totalMovesGenerated++; // count
-        totalMovesAccepted++;   // count
-        // This method simply takes all the unit actions executed so far, and packages them into a PlayerAction
-        System.out.println(" gs.gameover() 506 gmu3r2g "+gs.gameover());
-        Player p3 = gs.getPlayer(player);
-        System.out.println("Running getAction for Player: 508  " + player);
-        int currentTime = gs.getTime();
-        Player p0 = gs.getPlayer(0);
-        Player p1 = gs.getPlayer(1);
-
-        System.out.println(" current time "+currentTime+" p0 "+p0+" p1 "+p1);
-        String combinestring = "T : "+currentTime+","+p0+","+p1;
-        try (FileWriter writer = new FileWriter(fileName01,true)) {
-            if (response.indexOf("\"thinking\"") != -1 && response.indexOf("\"moves\"") != -1) {
-                String beforeMoves = response.substring(response.indexOf("\"thinking\"")+11, response.indexOf("\"moves\"")); // includes "thinking"
-                String fromMoves = response.substring(response.indexOf("\"moves\""));                 // includes "moves"
-
-                String plainasline = fromMoves.toString();
-                String csvSafe = escapeForCSV(beforeMoves);
-                String csvSafe2 = escapeForCSV(plainasline);
-                String arrayFormat2 = escapeForCSV(arrayFormat);
-                String combinestring2 = escapeForCSV(combinestring);
-                String value_TimestampandScore1 = escapeForCSV(value_TimestampandScore);
-                System.out.println(" Part 1: From 'thinking' to before 'moves'\n" + csvSafe);
-                System.out.println("part 2 : csvSafe2 "+csvSafe2);
-                System.out.println("part 2 : arrayFormat :  "+arrayFormat2);
-                System.out.println("part 223236969696 : combinestring :  "+combinestring);
-                writer.append(csvSafe).append(",").append(csvSafe2).append(",").append(arrayFormat2).append(",").append(promptTime.toString()).append(",").append(String.valueOf(requestTokens)).append(",").append(responseTime.toString()).append(",").append(String.valueOf(responseTokens)).append(",").append(String.valueOf(Latency)).append(",").append(String.valueOf(totalTokens)).append(",").append(value_TimestampandScore1).append("\n");
-            } else {
-                System.out.println(" Keywords not found.");
-            }
-        }
-        catch (IOException e){
-            e.printStackTrace();
-            System.err.println("error in writing they data  "+e.getMessage());
-        }
-
-// Score can be estimated using evaluation (if used), but usually this prints resource values or utility
-        System.out.printf("T: %d, P0: %d (%s), P1: %d (%s)%n",
-                currentTime,
-                p0.getID(), p0.getResources(),  // or any evaluation function result
-                p1.getID(), p1.getResources()
-        );
-        if (gs.gameover()) {
-            logEndGameMetrics();
-        }
-        // remove this  from heare
-        PlayerAction pa = translateActions(player, gs);
-        System.out.println("🎯 788  translateActions() generated PlayerAction:");
-        System.out.println(pa);
-        return pa;
-        // till heare
-        //return translateActions(player, gs);
-    }
-
-
-
-
-     */
-
-
-
-
-    /**
-     *
-     * @param value = "String format that contain a lot of , . \n "
-     *
-     * @return = " plain string which is not goint to split in any 2 are 3 individual bxes in excel are google sheets "
-     */
-    public static String escapeForCSV(String value) {
-        if (value == null) return "\"\"";
-        // Step 1: Escape internal quotes
-        String escaped = value.replace("\"", "\"\"");
-        // Step 2: Escape newlines (convert to literal \n so Excel doesn’t break cell)
-        escaped = escaped.replace("\n", "\\n").replace("\r", "\\r");
-        // Step 3: Wrap in quotes
-        return "\"" + escaped + "\"";
     }
 
 
@@ -1965,144 +1148,6 @@ INPUT:
     // - attack(Unit ally, Unit enemy)
     // - idle(Unit u)
     // - buildIfNotAlreadyBuilding(Unit ally, UnitType building, Int x, Int y, Player p, PhysicalGameState pgs) (This function has been omitted from the LLM)
-
-
-    /*
-    public String prompt(String prompt) {
-
-        requestTokens = calculateTokens(MODEL, prompt); // 'prompt' is your user/game state text
-        System.out.println(" rr ZZZZZZ ZZZZ  ZZZ. .. Request Tokens: " + requestTokens);
-
-        try {
-            // Create the body of the request
-            JsonObject requestBody = new JsonObject();
-            JsonArray contents = new JsonArray();
-
-            JsonObject part = new JsonObject();
-            part.addProperty("text", prompt);
-
-            JsonArray parts = new JsonArray();
-            parts.add(part);
-
-            JsonObject content = new JsonObject();
-            content.add("parts", parts);
-
-            contents.add(content);
-            requestBody.add("contents", contents);
-
-            // Add the schema to generationConfig
-            JsonObject generationConfig = new JsonObject();
-            generationConfig.addProperty("response_mime_type", "application/json");
-
-            // Add the response schema
-            generationConfig.add("response_schema", MOVE_RESPONSE_SCHEMA.get("response_schema"));
-
-            requestBody.add("generationConfig", generationConfig);  // Add generationConfig with schema
-
-            // Send the request
-
-            URL url = new URL(ENDPOINT_URL + MODEL + ":generateContent?key=" + API_KEY);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setDoOutput(true);
-            // Reqest time : the moment the connection is established
-            promptTime = Instant.now();  //
-            System.out.println("promptTime : "+promptTime);
-
-
-            System.out.println("🔼 gmu3r2g 651 :  Sending requestBody to Gemini API:");
-            System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(requestBody));
-
-            System.out.println("🔼 gmu3r2g end of 651  :   requestBody to Gemini API: end -------------- ");
-            try (OutputStream os = conn.getOutputStream()) {
-                byte[] input = requestBody.toString().getBytes("utf-8");
-                os.write(input, 0, input.length);
-            }
-
-            // Check for success (HTTP 200) or error (HTTP 400 or other)
-            int responseCode = conn.getResponseCode();
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "utf-8"));
-                StringBuilder response = new StringBuilder();
-                String responseLine;
-                while ((responseLine = br.readLine()) != null) {
-                    response.append(responseLine.trim());
-                }
-                responseTime = Instant.now(); // taking a snapshot of response.
-                System.out.println("responseTime : "+responseTime);
-
-                Latency = responseTime.toEpochMilli() - promptTime.toEpochMilli();
-
-                System.out.println(" 987 -->>: Latency : "+Latency);
-
-
-
-                // ⬇️ Print the raw JSON response string (BEFORE parsing)
-                // System.out.println("✅ Raw Response JSON from Gemini: gmu3r2g ");
-                System.out.println(response.toString());
-
-                // response count : ->
-                responseTokens = calculateTokens(MODEL, response.toString()); // 'prompt' is your user/game state text
-                System.out.println("  Res ZZZZZZ ZZZZ  ZZZ. .. responseTokens " + responseTokens);
-
-                totalTokens = requestTokens+responseTokens;
-                System.out.println(" totalTokens  -> > > " + totalTokens);
-                // System.out.println(" totalTokens  -> > > " + Integer.toString(totalTokens));
-
-
-
-
-                JsonParser parser1 = new JsonParser();
-                JsonObject jsonResponse1 = parser1.parse(response.toString()).getAsJsonObject();
-
-                // Optional: pretty print full response
-                System.out.println("✅ Parsed JSON Response:");
-                System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(jsonResponse1));
-
-                JsonArray candidates1 = jsonResponse1.getAsJsonArray("candidates");
-                JsonObject firstCandidate1 = candidates1.get(0).getAsJsonObject();
-                JsonObject contentObj1 = firstCandidate1.getAsJsonObject("content");
-                JsonArray partsArray1 = contentObj1.getAsJsonArray("parts");
-                JsonObject firstPart1 = partsArray1.get(0).getAsJsonObject();
-
-                System.out.println("✅ First Part Extracted:   775 gmu3r2g ");
-                System.out.println("  ------------------------------------  ");
-                System.out.println(firstPart1);
-                System.out.println("  ------------------------------------ 784   ");
-
-                // Process the response
-                JsonParser parser = new JsonParser();
-                JsonObject jsonResponse = parser.parse(response.toString()).getAsJsonObject();
-                JsonArray candidates = jsonResponse.getAsJsonArray("candidates");
-                JsonObject firstCandidate = candidates.get(0).getAsJsonObject();
-                JsonObject contentObj = firstCandidate.getAsJsonObject("content");
-                JsonArray partsArray = contentObj.getAsJsonArray("parts");
-                JsonObject firstPart = partsArray.get(0).getAsJsonObject();
-
-                // System.out.println(firstPart);
-
-                return firstPart.get("text").getAsString();
-            } else {
-                // Read the error response if not HTTP_OK
-                BufferedReader br = new BufferedReader(new InputStreamReader(conn.getErrorStream(), "utf-8"));
-                StringBuilder errorResponse = new StringBuilder();
-                String errorLine;
-                while ((errorLine = br.readLine()) != null) {
-                    errorResponse.append(errorLine.trim());
-                }
-
-                System.out.println("Error response: " + errorResponse.toString());
-                return "Error contacting Gemini API.";
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            return "Error contacting Gemini API.";
-        }
-    }  */
-
-
-
     public String prompt(String finalPrompt) {
         try {
             // Build Ollama request body
@@ -2145,7 +1190,6 @@ INPUT:
             Latency = responseTime.toEpochMilli() - promptTime.toEpochMilli();
 
             if (code != HttpURLConnection.HTTP_OK) {
-                System.err.println("❌ Ollama error (" + code + "): " + sb);
                 return "{\"thinking\":\"error\",\"moves\":[]}";
             }
 
@@ -2163,21 +1207,15 @@ INPUT:
             // Fall back to "thinking" field (qwen3 thinking models)
             else if (top.has("thinking") && !top.get("thinking").isJsonNull()) {
                 modelText = top.get("thinking").getAsString();
-                System.out.println("📝 Using 'thinking' field from qwen3 model");
             }
             else {
-                System.err.println("❌ Unexpected Ollama payload (no response or thinking): " + sb);
                 return "{\"thinking\":\"invalid_response\",\"moves\":[]}";
             }
 
-            // (Optional) log the raw text for debugging
-            // System.out.println("OLLAMA raw response:\n" + modelText);
-
-            // Return the text **as-is** — your caller will parse to JSON later
+            // Return the text **as-is** ??your caller will parse to JSON later
             return modelText;
 
         } catch (Exception e) {
-            e.printStackTrace();
             return "{\"thinking\":\"exception\",\"moves\":[]}";
         }
     }
@@ -2211,7 +1249,6 @@ INPUT:
             case "barracks":
                 return barracksType;
             default:
-                System.out.println("Unknown unit type: " + string);
                 return workerType;
         }
     }
@@ -2245,72 +1282,5 @@ INPUT:
         }
         return description;
     }
-
-
-    /**
-     * Calculates the number of tokens for a given text using Gemini's countTokens API.
-     *
-     * @param modelName The model i am using to know exactly how many tokens C/s
-     * @param text      The text (prompt or response) to calculate tokens for
-     * @return          The total token count for the given text
-     *
-     * not need for this are need to look for some thing else right now i am commenting this
-     *
-     */
-
-   /*
-    public int calculateTokens(String modelName, String text) {
-        try {
-            URL url = new URL(ENDPOINT_URL + modelName + ":countTokens?key=" + API_KEY);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setDoOutput(true);
-
-            // Build JSON request
-            JsonObject body = new JsonObject();
-            JsonArray contents = new JsonArray();
-
-            JsonObject part = new JsonObject();
-            part.addProperty("text", text);
-
-            JsonArray parts = new JsonArray();
-            parts.add(part);
-
-            JsonObject content = new JsonObject();
-            content.add("parts", parts);
-
-            contents.add(content);
-            body.add("contents", contents);
-
-            // Send request
-            try (OutputStream os = conn.getOutputStream()) {
-                byte[] input = body.toString().getBytes("utf-8");
-                os.write(input, 0, input.length);
-            }
-
-            // Read response
-            int code = conn.getResponseCode();
-            InputStream is = (code == HttpURLConnection.HTTP_OK) ? conn.getInputStream() : conn.getErrorStream();
-            BufferedReader br = new BufferedReader(new InputStreamReader(is, "utf-8"));
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = br.readLine()) != null) sb.append(line.trim());
-
-            if (code != HttpURLConnection.HTTP_OK) {
-                System.err.println("❌ Token count error: " + sb);
-                return 0;
-            }
-            JsonObject json = new JsonParser().parse(sb.toString()).getAsJsonObject();
-            return json.get("totalTokens").getAsInt();
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            return 0;
-        }
-    } */
-
-
-
 }
 
