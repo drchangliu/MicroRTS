@@ -7,7 +7,52 @@
 
 ---
 
-## 1. Overview
+## 1. Background & Motivation
+
+### MicroRTS and its competition
+
+MicroRTS is a lightweight Java real-time strategy environment created by
+**Santiago Ontañón** (Drexel) and presented at AIIDE 2013. The engine is
+deterministic, fast (thousands of games per minute), and supports both
+fully and partially observable play — properties that have made it a
+standard benchmark for tree search, reinforcement learning, and game-AI
+research for over a decade. It is maintained jointly with **Levi Lelis**
+and **Rubens O. Moraes**, who have stewarded the competition for years.
+
+The annual MicroRTS AI Competition has been hosted at IEEE-CIG (2017,
+2018), IEEE-COG (2019 onward) and now IEEE-WCCI (2026). Past winners
+include tree-search and scripted hybrids such as CoacAI, POLightRush,
+Mayari, and Tiamat — all of which appear in this edition as anchor
+opponents on the ladder.
+
+### Why an LLM edition?
+
+> **Use LLMs as the core of intelligence to solve RTS-game problems.**
+> LLM-based RTS agents are not the top solution today, but the area has
+> high growth potential — likely a research direction that compounds
+> quickly over the next few years.
+
+The 2026 edition is structured as a **two-pronged research program**:
+
+1. **Prong 1 — How best to use an LLM to solve RTS?**
+   The architecture / scaffolding question. Where does the LLM sit in
+   the loop (every tick, every N ticks, only at strategy switches)?
+   How do you compose an LLM with classical search (MCTS) or scripted
+   policies? What prompt format and game-state encoding makes the LLM
+   reliable? How do you handle latency, validity constraints, and JSON
+   parsing failures?
+
+2. **Prong 2 — Which LLM is best at RTS?**
+   The benchmark / model-comparison question. A standardized RTS
+   benchmark across open and closed models, measuring planning,
+   instruction-following, and structured-output reliability. Holding
+   scaffolding constant lets the model become the independent variable,
+   so we can track year-over-year LLM progress on a real-time, partially
+   observable task.
+
+---
+
+## 2. Overview
 
 The 2026 WCCI MicroRTS LLM Competition challenged participants to build agents
 that play MicroRTS — a real-time strategy benchmark — by reasoning about game
@@ -38,7 +83,7 @@ banks. CoacAI and Tiamat are the strongest ladder anchors.
 
 ---
 
-## 2. Final Leaderboard
+## 3. Final Leaderboard
 
 | Rank | Team | Best Score | Grade | Model | Approach |
 |---:|---|---:|:---:|---|---|
@@ -64,7 +109,7 @@ Notes:
 
 ---
 
-## 3. Per-Map Breakdown (Top 6)
+## 4. Per-Map Breakdown (Top 6)
 
 | Team | 8x8 | 16x16 | 32x32 | 64x64 |
 |---|:---:|:---:|:---:|:---:|
@@ -81,7 +126,7 @@ small-map tactics rarely transferred without an LLM-aware strategic layer.
 
 ---
 
-## 4. Submission Archetypes
+## 5. Submission Archetypes
 
 The 13 teams converged on five recognizable design patterns:
 
@@ -107,7 +152,7 @@ The 13 teams converged on five recognizable design patterns:
 
 ---
 
-## 5. What Worked, What Didn't
+## 6. What Worked, What Didn't
 
 ### What worked
 - **Hybrid architectures dominated.** Every A/B-grade entry kept the LLM out
@@ -132,7 +177,7 @@ The 13 teams converged on five recognizable design patterns:
 
 ---
 
-## 6. Headline Numbers
+## 7. Headline Numbers
 
 - **13 teams**, **15 agent binaries** evaluated
 - **1 A+ submission** (AlliBot, 100.5)
@@ -143,7 +188,7 @@ The 13 teams converged on five recognizable design patterns:
 
 ---
 
-## 7. Acknowledgments
+## 8. Acknowledgments
 
 Thanks to all 13 teams for their submissions, to the MicroRTS authors
 (Santi Ontañón, Levi Lelis, Rubens O. Moraes, et al.) for the open game
