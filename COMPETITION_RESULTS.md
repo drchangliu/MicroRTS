@@ -146,6 +146,7 @@ The 13 teams converged on five recognizable design patterns:
 ## 7. Acknowledgments
 
 Thanks to all 13 teams for their submissions, to the MicroRTS authors
-(Santi Ontañón et al.) for the open game engine, and to the IEEE WCCI 2026
-competition committee. Submissions, source code, and per-game logs are
-archived under `submissions/` and `tournament_results/` in the repository.
+(Santi Ontañón, Levi Lelis, Rubens O. Moraes, et al.) for the open game
+engine, and to the IEEE WCCI 2026 competition committee. Submissions,
+source code, and per-game logs are archived under `submissions/` and
+`tournament_results/` in the repository.
