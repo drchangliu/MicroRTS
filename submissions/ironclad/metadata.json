@@ -1,0 +1,9 @@
+{
+  "team_name": "ironclad",
+  "display_name": "Ironclad",
+  "agent_class": "IroncladBot",
+  "agent_file": "IroncladBot.java",
+  "model_provider": "none",
+  "model_name": "none",
+  "description": "Deterministic scripted bot: scales workers/barracks with map size, picks Light/Heavy/Ranged production adaptively from observed enemy composition, kites with Ranged units, and reactively pulls workers into defense against early rushes."
+}
