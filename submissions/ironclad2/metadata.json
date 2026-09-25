@@ -1,0 +1,9 @@
+{
+  "team_name": "ironclad2",
+  "display_name": "Ironclad 2",
+  "agent_class": "IroncladBot2",
+  "agent_file": "IroncladBot2.java",
+  "model_provider": "none",
+  "model_name": "none",
+  "description": "Deterministic scripted bot (successor to Ironclad): rallies newly trained units near home instead of trickling them out alone, only committing to an attack once a real strike force has formed or the game clock forces the issue. Fixes an under-reaction bug in the original's emergency worker-defense (it capped the response at half the workforce, which lost to swarms bigger than that), rebalances Light/Heavy/Ranged production, and recognizes single-unit-economy rush opponents (HeavyRush/LightRush/WorkerRush) to respond appropriately."
+}
